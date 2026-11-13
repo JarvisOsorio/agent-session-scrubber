@@ -127,25 +127,42 @@ fn atomic_replace(
         ));
     }
 
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path)
-        .map_err(|source| AgentscrubError::Io {
+    // Lock + hash recheck, then drop the handle before rename.
+    // Windows cannot replace a file while this process still holds it open.
+    let current = {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .map_err(|source| AgentscrubError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        FileExt::lock_exclusive(&file).map_err(|e| {
+            AgentscrubError::Remediation(format!("could not lock {}: {e}", path.display()))
+        })?;
+        let bytes = std::fs::read(path).map_err(|source| AgentscrubError::Io {
             path: path.clone(),
             source,
         })?;
-    FileExt::lock_exclusive(&file).map_err(|e| {
-        AgentscrubError::Remediation(format!("could not lock {}: {e}", path.display()))
-    })?;
+        let current_hash = sha256_hex(&bytes);
+        let _ = FileExt::unlock(&file);
+        drop(file);
+        if current_hash != doc.original_hash {
+            return Err(AgentscrubError::Remediation(format!(
+                "file changed since scan (hash mismatch); refusing write: {}",
+                path.display()
+            )));
+        }
+        bytes
+    };
 
-    let current = std::fs::read(path).map_err(|source| AgentscrubError::Io {
+    // Final recheck immediately before staging the replacement.
+    let recheck = std::fs::read(path).map_err(|source| AgentscrubError::Io {
         path: path.clone(),
         source,
     })?;
-    let current_hash = sha256_hex(&current);
-    if current_hash != doc.original_hash {
-        let _ = FileExt::unlock(&file);
+    if sha256_hex(&recheck) != doc.original_hash {
         return Err(AgentscrubError::Remediation(format!(
             "file changed since scan (hash mismatch); refusing write: {}",
             path.display()
@@ -177,14 +194,39 @@ fn atomic_replace(
         .map_err(|e| AgentscrubError::Remediation(format!("temp flush failed: {e}")))?;
 
     let tmp_path = tmp.path().to_path_buf();
-    // Persist permissions similar to original when possible.
     if let Ok(meta) = std::fs::metadata(path) {
         let _ = std::fs::set_permissions(&tmp_path, meta.permissions());
     }
 
-    tmp.persist(path)
-        .map_err(|e| AgentscrubError::Remediation(format!("atomic replace failed: {e}")))?;
-    let _ = FileExt::unlock(&file);
+    // Prefer same-directory persist. On Windows, overwrite via remove+rename if needed.
+    if let Err(err) = tmp.persist(path) {
+        let staged = err.file.path().to_path_buf();
+        // Keep staged bytes available even if persist failed.
+        let staged_bytes = std::fs::read(&staged).unwrap_or_else(|_| rewrite.new_bytes.clone());
+        drop(err.file);
+        let swap = parent.join(format!(
+            ".agentscrub-swap-{}",
+            &sha256_hex(&rewrite.new_bytes)[..12]
+        ));
+        std::fs::write(&swap, &staged_bytes).map_err(|source| AgentscrubError::Io {
+            path: swap.clone(),
+            source,
+        })?;
+        let retired = parent.join(format!(".agentscrub-old-{}", &sha256_hex(&current)[..12]));
+        std::fs::rename(path, &retired).map_err(|source| AgentscrubError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if let Err(e) = std::fs::rename(&swap, path) {
+            let _ = std::fs::rename(&retired, path);
+            let _ = std::fs::remove_file(&swap);
+            return Err(AgentscrubError::Remediation(format!(
+                "atomic replace failed: {e}"
+            )));
+        }
+        let _ = std::fs::remove_file(&retired);
+        let _ = staged;
+    }
 
     Ok(RedactionReceipt {
         file_path: path.display().to_string(),
