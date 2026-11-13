@@ -1,0 +1,7 @@
+/target/
+**/*.rs.bk
+.DS_Store
+*.swp
+report.json
+*.bak.*
+/Cargo.lock.bak

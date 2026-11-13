@@ -1,0 +1,3 @@
+{"type":"user","text":"Cursor composer note: sendgrid SG.abcdefghijklmnop.qrstuvwxyz0123456789ABCDEF and twilio AC0123456789abcdef0123456789abcdef"}
+{"type":"assistant","bubble":{"text":"Avoid pasting keys. GCP AIzaSyA-abcdefghijklmnopqrstuvwxyz012345 detected."}}
+{"type":"user","content":"password=\"SuperSecretPass123\" for local only"}

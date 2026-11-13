@@ -1,0 +1,49 @@
+[package]
+name = "agentscrub"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+authors = ["Jarvis Osorio <https://jarvisosorio.com>"]
+license = "Apache-2.0"
+description = "Local-first CLI that discovers, scans, classifies, and redacts secrets and PII in AI agent session transcripts"
+readme = "README.md"
+repository = "https://github.com/JarvisOsorio/agent-session-scrubber"
+keywords = ["security", "privacy", "secrets", "pii", "agent"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["tests/fixtures/**"]
+
+[[bin]]
+name = "agentscrub"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.95"
+aho-corasick = "1.1.3"
+chrono = { version = "0.4.39", default-features = false, features = ["clock", "std"] }
+clap = { version = "4.5.27", features = ["derive", "env"] }
+comfy-table = "7.1.3"
+fs2 = "0.4.3"
+hex = "0.4.3"
+hmac = "0.12.1"
+owo-colors = "4.1.0"
+regex = "1.11.1"
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.138"
+sha2 = "0.10.8"
+tempfile = "3.16.0"
+thiserror = "2.0.11"
+toml = "0.8.19"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+walkdir = "2.5.0"
+
+[dev-dependencies]
+assert_cmd = "2.0.16"
+predicates = "3.1.3"
+tempfile = "3.16.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

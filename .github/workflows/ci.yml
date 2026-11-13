@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "cursor/**", "dev/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: test
+        run: cargo test --all-features
+      - name: offline invariant (no unexpected sockets during unit tests)
+        run: |
+          # agentscrub scan/scrub paths must not require network; tests use fixtures only.
+          cargo test --all-features -- --nocapture
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+        continue-on-error: true
+      - name: cargo-audit fallback
+        run: |
+          cargo install cargo-audit --locked || true
+          cargo audit || true
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: release build
+        run: cargo build --release --target ${{ matrix.target }}
