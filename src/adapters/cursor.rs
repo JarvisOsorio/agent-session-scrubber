@@ -240,11 +240,7 @@ fn parse_cursor_sqlite(path: &Path, source: &str) -> Result<ParsedSession> {
             let Ok(mut stmt) = conn.prepare(&sql) else {
                 continue;
             };
-            let column_names: Vec<String> = stmt
-                .column_names()
-                .iter()
-                .map(|s| (*s).to_string())
-                .collect();
+            let column_names: Vec<String> = stmt.column_names().map(|s| s.to_string()).collect();
             let mut rows = match stmt.query([]) {
                 Ok(r) => r,
                 Err(_) => continue,

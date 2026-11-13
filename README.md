@@ -109,9 +109,23 @@ Unsupported / malformed files are **skipped and reported**, never silently modif
 cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
+cargo audit --deny warnings
 ```
 
 Fixtures under `tests/fixtures/` are **synthetic only** — never real credentials or customer transcripts.
+
+### CI matrix
+
+GitHub Actions runs:
+
+| Job | Platforms |
+|-----|-----------|
+| `test` | Ubuntu, macOS, Windows (`cargo test`) |
+| `fmt` / `clippy` | Ubuntu only |
+| `build` (release) | `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc` |
+| `audit` | Ubuntu — **blocking** `cargo audit --deny warnings` |
+
+Linux x86_64 is required. macOS/Windows are included in Actions; native cross-compile outside those runners is not claimed.
 
 ## License
 

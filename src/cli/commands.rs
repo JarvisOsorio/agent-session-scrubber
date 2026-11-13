@@ -8,7 +8,7 @@ use crate::discovery::{discover, discover_paths};
 use crate::errors::{AgentscrubError, ExitCode, Result};
 use crate::models::{Finding, SkipRecord, SourceDocument};
 use crate::normalization::normalize_session;
-use crate::policy::{ensure_retention_enabled, retention_status};
+use crate::policy::{ensure_retention_enabled, plan_retention, retention_status};
 use crate::remediation::redact::{apply_redaction, RedactionMode};
 use crate::remediation::verify::verify_file;
 use crate::reporting::{
@@ -416,13 +416,29 @@ fn cmd_retention(cli: &Cli, config: &AppConfig, action: RetentionCommands) -> Re
             Ok(ExitCode::Ok)
         }
         RetentionCommands::Plan => {
-            println!(
-                "retention plan (dry-run): enabled={} max_age_days={} — no deletions scheduled while flag is off",
-                config.retention.enabled, config.retention.max_age_days
-            );
-            if !cli.paths.is_empty() {
-                for p in &cli.paths {
-                    println!("  KEEP {}", p.display());
+            let discovered = if !cli.paths.is_empty() {
+                discover_paths(&cli.paths, config, &AdapterRegistry::with_defaults())?
+            } else {
+                discover(config, &AdapterRegistry::with_defaults())?
+            };
+            let plan = plan_retention(config, &discovered.files);
+            match cli.format {
+                OutputFormat::Json => print_json(&plan)?,
+                _ => {
+                    println!(
+                        "retention plan (read-only): enabled={} max_age_days={} files={} would_delete={} refused_uncertain={}",
+                        plan.enabled,
+                        plan.max_age_days,
+                        plan.decisions.len(),
+                        plan.would_delete,
+                        plan.refused_mixed_age
+                    );
+                    for d in &plan.decisions {
+                        println!(
+                            "  {:?} {} — {} ({})",
+                            d.action, d.path, d.reason, d.timestamp_source
+                        );
+                    }
                 }
             }
             Ok(ExitCode::Ok)

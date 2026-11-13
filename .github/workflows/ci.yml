@@ -8,46 +8,55 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - name: fmt
+        if: matrix.os == 'ubuntu-latest'
         run: cargo fmt --all -- --check
       - name: clippy
+        if: matrix.os == 'ubuntu-latest'
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: test
         run: cargo test --all-features
-      - name: offline invariant (no unexpected sockets during unit tests)
-        run: |
-          # agentscrub scan/scrub paths must not require network; tests use fixtures only.
-          cargo test --all-features -- --nocapture
 
   audit:
+    name: audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check advisories
-        continue-on-error: true
-      - name: cargo-audit fallback
-        run: |
-          cargo install cargo-audit --locked || true
-          cargo audit || true
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit (blocking on vulnerabilities)
+        run: cargo audit --deny warnings
+        # Fail the job on known RustSec advisories. If a transitive advisory
+        # is accepted, document an ignore in .cargo/audit.toml with rationale.
 
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        target: [x86_64-unknown-linux-gnu]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
