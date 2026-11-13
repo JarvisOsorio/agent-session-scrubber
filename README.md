@@ -2,7 +2,7 @@
 
 **Local-first Rust CLI** that discovers, scans, classifies, and redacts **secrets and PII** in AI agent session transcripts — without cloud, accounts, telemetry, or network calls during scan/scrub.
 
-> **Status:** v0.1.0 working scanner. Private repo until coordinator confirms acceptance. Not production-ready marketing until CI + acceptance targets are green and reviewed.
+> **Status:** **v0.1.0** public working scanner. CI green on Linux/macOS/Windows. Honest limits below — Cursor rewrite is read-only; retention deletion is disabled by default.
 
 ## Why agentscrub
 
@@ -14,16 +14,20 @@ Peers often race on agent count or optional live key verification. agentscrub op
 - **Retention architecture** present but **`retention.enabled = false`** (deletion refused)
 - Offline by default · Apache-2.0 · single native binary
 
-## Install (from source)
+## Install
+
+From source (recommended; crates.io / Homebrew not published for v0.1.0):
 
 ```bash
+git clone https://github.com/JarvisOsorio/agent-session-scrubber.git
+cd agent-session-scrubber
 cargo install --path .
 # or
 cargo build --release
 ./target/release/agentscrub --help
 ```
 
-Requires Rust **1.89+**.
+Requires Rust **1.89+**. Release notes: [v0.1.0](https://github.com/JarvisOsorio/agent-session-scrubber/releases/tag/v0.1.0).
 
 ## Quick start
 
@@ -82,11 +86,18 @@ See [`config/default.toml`](config/default.toml). Key defaults:
 |---------|------|--------|-------|
 | `claude_code` | ✓ | ✓ | JSONL sessions |
 | `codex` | ✓ | ✓ | JSONL sessions |
-| `cursor` | ✓ | ✗ | JSONL + SQLite `state.vscdb` scan; rewrite gated read-only |
+| `cursor` | ✓ | ✗ | JSONL + SQLite `state.vscdb` **scan only** — rewrite intentionally disabled |
 | `generic_jsonl` | ✓ | ✓ | Configurable text fields |
 | `generic_json` | ✓ | ✓ | Single JSON documents |
 
 Unsupported / malformed files are **skipped and reported**, never silently modified.
+
+### Known limitations (do not overclaim)
+
+- **Cursor:** discovery + scan work; **redaction/rewrite is refused** until SQLite/transcript mutation is proven safe.
+- **Retention:** `retention plan` / `status` are read-only. **`retention.enabled = false` by default**; `retention apply` refuses deletion while the flag is off.
+- **Not** a credential revocation service — rotate secrets at the provider after a finding.
+- **Not** on crates.io or Homebrew yet — install from this GitHub repo / Release notes.
 
 ## Security posture
 

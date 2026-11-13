@@ -4,11 +4,11 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes (pre-release / working scanner) |
+| 0.1.x   | Yes (public working scanner) |
 
 ## Reporting a vulnerability
 
-Email security concerns to the maintainer via [jarvisosorio.com](https://jarvisosorio.com) contact channels, or open a **private** security advisory on the GitHub repository when the repo is public.
+Prefer a [GitHub private security advisory](https://github.com/JarvisOsorio/agent-session-scrubber/security/advisories/new) on this repository, or contact via [jarvisosorio.com](https://jarvisosorio.com).
 
 Please include:
 
@@ -31,6 +31,7 @@ Redaction of local transcripts does **not**:
 
 - revoke credentials at providers
 - erase Time Machine / volume snapshots / editor backups
-- guarantee Cursor SQLite rewrite safety (v0.1 stays read-only for Cursor rewrite)
+- rewrite Cursor stores in v0.1 — **Cursor adapter is scan-only** (rewrite capability off)
+- delete sessions by retention policy while `retention.enabled = false` (default) — plan/status only; apply refuses
 
 Rotate any exposed credential at the issuing provider.
