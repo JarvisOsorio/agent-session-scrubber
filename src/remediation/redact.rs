@@ -5,7 +5,7 @@ use crate::utils::sha256_hex;
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -127,10 +127,10 @@ fn atomic_replace(
         ));
     }
 
-    // Lock + hash recheck, then drop the handle before rename.
-    // Windows cannot replace a file while this process still holds it open.
+    // Lock + hash recheck via the same handle (Windows exclusive locks reject a
+    // second open), then drop the handle before rename/replace.
     let current = {
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .read(true)
             .write(true)
             .open(path)
@@ -141,10 +141,12 @@ fn atomic_replace(
         FileExt::lock_exclusive(&file).map_err(|e| {
             AgentscrubError::Remediation(format!("could not lock {}: {e}", path.display()))
         })?;
-        let bytes = std::fs::read(path).map_err(|source| AgentscrubError::Io {
-            path: path.clone(),
-            source,
-        })?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(|source| AgentscrubError::Io {
+                path: path.clone(),
+                source,
+            })?;
         let current_hash = sha256_hex(&bytes);
         let _ = FileExt::unlock(&file);
         drop(file);
@@ -156,18 +158,6 @@ fn atomic_replace(
         }
         bytes
     };
-
-    // Final recheck immediately before staging the replacement.
-    let recheck = std::fs::read(path).map_err(|source| AgentscrubError::Io {
-        path: path.clone(),
-        source,
-    })?;
-    if sha256_hex(&recheck) != doc.original_hash {
-        return Err(AgentscrubError::Remediation(format!(
-            "file changed since scan (hash mismatch); refusing write: {}",
-            path.display()
-        )));
-    }
 
     let backup_path = if backup {
         let bak = backup_path_for(path);
