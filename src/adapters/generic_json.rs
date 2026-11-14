@@ -1,5 +1,5 @@
 use super::jsonl_common::{
-    collect_string_fields, modified_at, read_limited, redaction_token, text_segment,
+    collect_string_fields, modified_at, read_limited, redact_json_value, text_segment,
 };
 use super::traits::SourceAdapter;
 use crate::config::AppConfig;
@@ -99,15 +99,11 @@ impl SourceAdapter for GenericJsonAdapter {
     }
 
     fn rewrite(&self, original: &SourceDocument, findings: &[Finding]) -> Result<RewriteResult> {
+        let _ = findings; // re-detect on string leaves; stored offsets are not trusted
         let mut value: Value = serde_json::from_slice(&original.original_bytes).map_err(|e| {
             AgentscrubError::Remediation(format!("cannot parse JSON for rewrite: {e}"))
         })?;
-        let mut applied = 0usize;
-        for finding in findings {
-            if apply_offset_redaction(&mut value, finding, &redaction_token(finding)) {
-                applied += 1;
-            }
-        }
+        let applied = redact_json_value(&mut value);
         let new_bytes = serde_json::to_vec_pretty(&value).map_err(|e| {
             AgentscrubError::Remediation(format!("cannot serialize redacted JSON: {e}"))
         })?;
@@ -128,46 +124,4 @@ impl SourceAdapter for GenericJsonAdapter {
             structural_verification: true,
         }
     }
-}
-
-fn apply_offset_redaction(value: &mut Value, finding: &Finding, token: &str) -> bool {
-    fn walk(value: &mut Value, finding: &Finding, token: &str, path: &str) -> bool {
-        match value {
-            Value::Object(map) => {
-                for (k, v) in map.iter_mut() {
-                    let child = if path.is_empty() {
-                        k.clone()
-                    } else {
-                        format!("{path}.{k}")
-                    };
-                    if walk(v, finding, token, &child) {
-                        return true;
-                    }
-                }
-                false
-            }
-            Value::Array(arr) => {
-                for (i, v) in arr.iter_mut().enumerate() {
-                    if walk(v, finding, token, &format!("{path}[{i}]")) {
-                        return true;
-                    }
-                }
-                false
-            }
-            Value::String(s) => {
-                if (path == finding.field_path
-                    || finding.field_path.ends_with(path)
-                    || path.ends_with(&finding.field_path))
-                    && finding.end_offset <= s.len()
-                    && finding.start_offset < finding.end_offset
-                {
-                    s.replace_range(finding.start_offset..finding.end_offset, token);
-                    return true;
-                }
-                false
-            }
-            _ => false,
-        }
-    }
-    walk(value, finding, token, "")
 }

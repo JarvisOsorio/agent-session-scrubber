@@ -18,7 +18,8 @@ pub fn secret_rules() -> &'static [SecretRule] {
             category: "aws",
             severity: Severity::Critical,
             confidence: Confidence::Certain,
-            pattern: r"(?i)\b(AKIA|ASIA)[0-9A-Z]{16}\b",
+            // Non-capturing alternation: find_secrets prefers group 1 when present.
+            pattern: r"(?i)\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
         },
         SecretRule {
             id: "aws_secret_access_key",
@@ -74,14 +75,14 @@ pub fn secret_rules() -> &'static [SecretRule] {
             category: "stripe",
             severity: Severity::Critical,
             confidence: Confidence::Certain,
-            pattern: r"\bsk_(live|test)_[A-Za-z0-9]{16,}\b",
+            pattern: r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b",
         },
         SecretRule {
             id: "stripe_publishable_key",
             category: "stripe",
             severity: Severity::Medium,
             confidence: Confidence::High,
-            pattern: r"\bpk_(live|test)_[A-Za-z0-9]{16,}\b",
+            pattern: r"\bpk_(?:live|test)_[A-Za-z0-9]{16,}\b",
         },
         SecretRule {
             id: "slack_bot_token",
@@ -246,7 +247,14 @@ pub fn find_secrets(text: &str) -> Vec<RawMatch> {
     let mut out = Vec::new();
     for compiled in compiled_rules() {
         for caps in compiled.regex.captures_iter(text) {
-            let m = caps.get(1).or_else(|| caps.get(0)).expect("regex match");
+            // Prefer an intentional secret-body capture (group 1) when it spans most of
+            // the match (e.g. password=VALUE). Never use tiny alternation groups like
+            // (AKIA|ASIA) or (live|test) as the redaction span.
+            let full = caps.get(0).expect("regex match");
+            let m = caps
+                .get(1)
+                .filter(|g1| g1.as_str().len() * 2 >= full.as_str().len())
+                .unwrap_or(full);
             let value = m.as_str().to_string();
             if is_placeholder(&value) {
                 continue;
@@ -301,6 +309,22 @@ mod tests {
         let hits = find_secrets(text);
         assert!(hits.iter().any(|h| h.detector_id == "aws_access_key_id"));
         assert!(hits.iter().any(|h| h.detector_id == "github_pat"));
+    }
+
+    #[test]
+    fn aws_and_stripe_spans_cover_full_secret_not_alternation() {
+        let text = "AKIAIOSFODNN7TESTKEY and sk_test_51HaBcDeFgHiJkLmNoPqRsTu";
+        let hits = find_secrets(text);
+        let aws = hits
+            .iter()
+            .find(|h| h.detector_id == "aws_access_key_id")
+            .expect("aws");
+        assert_eq!(aws.value, "AKIAIOSFODNN7TESTKEY");
+        let stripe = hits
+            .iter()
+            .find(|h| h.detector_id == "stripe_secret_key")
+            .expect("stripe");
+        assert_eq!(stripe.value, "sk_test_51HaBcDeFgHiJkLmNoPqRsTu");
     }
 
     #[test]
