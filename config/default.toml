@@ -1,0 +1,32 @@
+# agentscrub default configuration
+# Local-first: no network, no telemetry.
+
+[discovery]
+# Empty roots fall back to well-known agent home directories.
+roots = []
+follow_symlinks = false
+max_file_bytes = 67108864
+
+[detection]
+min_confidence = "medium"
+enable_pii = true
+enable_entropy = false
+allowlist = []
+
+[redaction]
+mode = "mask"
+backup = true
+
+[retention]
+# Deletion stays disabled until safety acceptance tests pass.
+enabled = false
+max_age_days = 90
+
+[reporting]
+include_masked_values = true
+
+[generic_jsonl]
+text_fields = ["content", "text", "message", "input", "output"]
+
+# Local fingerprinting only — never transmitted.
+hmac_key = "agentscrub-local-fingerprint-v1"

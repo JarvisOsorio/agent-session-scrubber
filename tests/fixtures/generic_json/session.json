@@ -1,0 +1,13 @@
+{
+  "session_id": "fixture-generic-json-v1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Here is sk_live_abcdefghijklmnopqrstuv and pk_test_abcdefghijklmnopqrstuv"
+    },
+    {
+      "role": "assistant",
+      "text": "Contact support@agentscrub.test or +1 (212) 555-0199"
+    }
+  ]
+}

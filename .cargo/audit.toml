@@ -1,0 +1,7 @@
+# cargo-audit configuration for agentscrub.
+# Prefer fixing or upgrading over ignoring. Any ignore must include a rationale.
+
+[advisories]
+# ignore = [
+#   # "RUSTSEC-YYYY-NNNN",  # rationale: …
+# ]

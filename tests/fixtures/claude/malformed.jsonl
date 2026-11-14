@@ -1,0 +1,3 @@
+{"type":"user","role":"user","message":{"content":[{"type":"text","text":"good line with gho_abcdefghijklmnopqrstuvwxyz0123456789"}]}}
+{not valid json
+{"type":"assistant","role":"assistant","message":{"content":[{"type":"text","text":"still ok after bad line"}]}}

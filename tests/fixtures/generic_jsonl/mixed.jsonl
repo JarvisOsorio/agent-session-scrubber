@@ -1,0 +1,3 @@
+{"role":"user","text":"generic line with github_pat_abcdefghijklmnopqrstuvwxyz0123456789012345"}
+{"role":"assistant","content":"mongodb://user:passw0rd@cluster.example.net/db and ipv4 203.0.113.42"}
+{"message":"ssh key header -----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAA\n-----END OPENSSH PRIVATE KEY-----"}
