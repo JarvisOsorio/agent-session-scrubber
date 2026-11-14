@@ -128,8 +128,30 @@ fn scrub_dry_run_and_confirm_on_temp_claude_fixture() {
     assert!(receipt.redactions_applied > 0);
 
     let verify = verify_file(&path, &cfg, &registry, &[]).unwrap();
-    // Structure must remain valid JSONL
     assert!(verify.structure_valid);
+    assert!(
+        verify.clean && verify.remaining_findings == 0,
+        "expected clean verify after confirm scrub, got remaining={} fps={:?}",
+        verify.remaining_findings,
+        verify.remaining_fingerprints
+    );
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    for residual in [
+        "AKIAIOSFODNN7TESTKEY",
+        "IOSFODNN7TESTKEY",
+        "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWX",
+        "sk-proj-abcdefghijklmnopqrstuvwxyz012345",
+        "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+        "sk_test_51HaBcDeFgHiJkLmNoPqRsTu",
+        "xoxb-12345678901-123456789012-abcdefghijklmnopqrstuvwx",
+    ] {
+        assert!(
+            !body.contains(residual),
+            "residual secret substring still present after scrub: {residual}\n{body}"
+        );
+    }
+    assert!(body.contains("[REDACTED:"));
 }
 
 #[test]

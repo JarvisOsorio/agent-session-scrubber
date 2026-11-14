@@ -4,6 +4,7 @@ use agentscrub::config::AppConfig;
 use agentscrub::detectors::detect_in_session;
 use agentscrub::models::{Finding, RewriteResult, Severity, SourceDocument};
 use agentscrub::remediation::redact::{apply_redaction, RedactionMode};
+use agentscrub::remediation::verify::verify_file;
 use agentscrub::utils::sha256_hex;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -175,4 +176,34 @@ fn dry_run_does_not_modify_file() {
         apply_redaction(&doc, &adapter, &findings, RedactionMode::DryRun, true).unwrap();
     assert!(receipt.unwrap().dry_run);
     assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+/// Regression: multi-finding / nested tool_use redaction must leave zero supported secrets.
+#[test]
+fn confirm_scrub_claude_fixture_verify_clean() {
+    let registry = AdapterRegistry::with_defaults();
+    let (_dir, path, adapter) = temp_claude_copy();
+    let (doc, findings) = doc_for(&path, &adapter);
+    assert!(
+        findings.len() >= 4,
+        "fixture should yield multiple findings, got {}",
+        findings.len()
+    );
+
+    apply_redaction(&doc, &adapter, &findings, RedactionMode::Confirm, true).unwrap();
+
+    let verify = verify_file(&path, &AppConfig::default(), &registry, &[]).unwrap();
+    assert_eq!(
+        verify.remaining_findings, 0,
+        "expected remaining_findings=0, got {} ({:?})",
+        verify.remaining_findings, verify.remaining_fingerprints
+    );
+    assert!(verify.clean);
+    assert!(verify.structure_valid);
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    assert!(!body.contains("sk-ant-"));
+    assert!(!body.contains("sk-proj-"));
+    assert!(!body.contains("AKIA"));
+    assert!(!body.contains("ghp_"));
 }

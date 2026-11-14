@@ -1,56 +1,50 @@
 # agentscrub
 
-**Local-first Rust CLI** that discovers, scans, classifies, and redacts **secrets and PII** in AI agent session transcripts — without cloud, accounts, telemetry, or network calls during scan/scrub.
+**Local-first Rust CLI** that discovers, scans, and redacts **secrets and PII** in AI agent session transcripts — offline, no accounts, no telemetry.
 
-> **Status:** **v0.1.0** public working scanner. CI green on Linux/macOS/Windows. Honest limits below — Cursor rewrite is read-only; retention deletion is disabled by default.
+> **Status:** **v0.1.0** private until pre-public GO. CI green on Linux/macOS/Windows. Cursor rewrite is read-only; retention deletion is flagged off.
 
-## Why agentscrub
+## Problem
 
-Peers often race on agent count or optional live key verification. agentscrub optimizes for **depth and safety**:
-
-- Verified adapters for **Claude Code**, **Codex**, **Cursor** (read-only rewrite until proven), and **generic JSONL/JSON**
-- **Secrets + initial PII** with severity, confidence, masking, and HMAC fingerprints (no raw secrets in reports)
-- **Dry-run → `--confirm` → atomic rewrite → verify → sanitized receipts**
-- **Retention architecture** present but **`retention.enabled = false`** (deletion refused)
-- Offline by default · Apache-2.0 · single native binary
+Agent transcripts (Claude Code, Codex, Cursor, and generic JSONL) often store API keys, cloud credentials, and PII in plain text on disk. agentscrub finds them locally and can rewrite supported formats safely (dry-run by default).
 
 ## Install
-
-From source (recommended; crates.io / Homebrew not published for v0.1.0):
 
 ```bash
 git clone https://github.com/JarvisOsorio/agent-session-scrubber.git
 cd agent-session-scrubber
 cargo install --path .
-# or
-cargo build --release
-./target/release/agentscrub --help
+# or: cargo build --release && ./target/release/agentscrub --help
 ```
 
-Requires Rust **1.89+**. Release notes: [v0.1.0](https://github.com/JarvisOsorio/agent-session-scrubber/releases/tag/v0.1.0).
+Requires Rust **1.89+**. Not on crates.io / Homebrew yet.
 
-## Quick start
+## Three commands that work (fixtures)
+
+Copy fixtures first — never scrub the originals in-tree during experiments:
 
 ```bash
-# Discover session files under configured roots or explicit paths
-agentscrub discover --path ./tests/fixtures
+mkdir -p /tmp/agentscrub-demo/.claude
+cp tests/fixtures/claude/session_secrets.jsonl /tmp/agentscrub-demo/.claude/
 
-# Scan for secrets + PII (terminal or JSON)
-agentscrub scan --path ./tests/fixtures/claude --format terminal
-agentscrub scan --path ./tests/fixtures --format json --output report.json
+# 1) Find sessions
+agentscrub discover --path /tmp/agentscrub-demo
 
-# Dry-run redaction (default)
-agentscrub scrub --path ./tests/fixtures/claude/.keep-or-copy-first
+# 2) Scan (masked values + fingerprints only — no raw secrets in output)
+agentscrub scan --path /tmp/agentscrub-demo --format terminal
 
-# Apply redaction only with explicit confirm
-agentscrub scrub --path /path/to/session.jsonl --confirm
+# 3) Dry-run → confirm scrub → verify clean
+agentscrub scrub --path /tmp/agentscrub-demo/.claude/session_secrets.jsonl
+agentscrub scrub --path /tmp/agentscrub-demo/.claude/session_secrets.jsonl --confirm
+agentscrub verify /tmp/agentscrub-demo/.claude/session_secrets.jsonl --format json
+# expect: clean=true, remaining_findings=0, exit 0
+```
 
-# Verify structure / remaining findings
-agentscrub verify /path/to/session.jsonl
+Against your own agent homes (defaults also look under `~/.claude`, Codex/Cursor roots when configured):
 
-# Retention (plan/status only while flagged off)
-agentscrub retention status
-agentscrub retention plan --path /path/to/sessions
+```bash
+agentscrub discover
+agentscrub scan --path ~/.claude --format json --output report.json
 ```
 
 ## Commands
@@ -67,9 +61,9 @@ agentscrub retention plan --path /path/to/sessions
 
 ### Exit codes
 
-`0` ok · `1` general · `2` bad args · `3` unsupported · `4` permission · `5` validation · `6` remediation · `7` policy · `8` incomplete scan
+`0` ok · `1` general · `2` bad args · `3` unsupported · `4` permission · `5` validation / unclean verify · `6` remediation · `7` policy · `8` incomplete scan
 
-Incomplete ≠ clean.
+Incomplete ≠ clean. Unclean `verify` exits `5`.
 
 ## Configuration
 
@@ -97,7 +91,7 @@ Unsupported / malformed files are **skipped and reported**, never silently modif
 - **Cursor:** discovery + scan work; **redaction/rewrite is refused** until SQLite/transcript mutation is proven safe.
 - **Retention:** `retention plan` / `status` are read-only. **`retention.enabled = false` by default**; `retention apply` refuses deletion while the flag is off.
 - **Not** a credential revocation service — rotate secrets at the provider after a finding.
-- **Not** on crates.io or Homebrew yet — install from this GitHub repo / Release notes.
+- **Not** on crates.io or Homebrew yet — install from this GitHub repo.
 
 ## Security posture
 
@@ -127,16 +121,12 @@ Fixtures under `tests/fixtures/` are **synthetic only** — never real credentia
 
 ### CI matrix
 
-GitHub Actions runs:
-
 | Job | Platforms |
 |-----|-----------|
 | `test` | Ubuntu, macOS, Windows (`cargo test`) |
 | `fmt` / `clippy` | Ubuntu only |
 | `build` (release) | `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc` |
 | `audit` | Ubuntu — **blocking** `cargo audit --deny warnings` |
-
-Linux x86_64 is required. macOS/Windows are included in Actions; native cross-compile outside those runners is not claimed.
 
 ## License
 
